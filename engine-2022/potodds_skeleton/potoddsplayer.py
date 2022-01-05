@@ -25,7 +25,7 @@ class Player(Bot):
         Nothing.
         '''
     
-    def calc_strength(self, hole, iters):
+    def calc_strength(self, hole, iters, comm = None):
         '''
         A Monte carlo method that estimates the win probability of a pair of hole cards 
         Args:
@@ -39,18 +39,24 @@ class Player(Bot):
         for card in hole_cards:
             deck.cards.remove(card)
 
+        comm_cards = []
+        if not comm: # if there are community cards
+            comm_cards = [eval7.Card(card) for card in comm] # list of our community cards
+            for card in comm_cards:
+                deck.cards.remove(card)
+
         score = 0
 
         for _ in range(iters):
             deck.shuffle()
 
-            _COMM = 5 
+            _COMM = 5 - len(comm_cards) 
             _OPP = 2
 
             draw = deck.peek(_COMM+_OPP)
 
             opp_hole = draw[:_OPP]
-            community = draw[_OPP:]
+            community = draw[_OPP:] + comm_cards
 
             our_hand = hole_cards + community
             opp_hand = opp_hole + community
@@ -72,6 +78,33 @@ class Player(Bot):
         return hand_strength
 
 
+
+    def calc_potential(self, hole, community, iters):
+        """
+        Calculates positive and negative potential for a given hand. They are defined as:
+        Positive potential: of all possible games with the current hand, all
+        scenarios where the agent is behind but ends up winning are calculated.
+        Negative potential: of all possible games with the current hand, all the
+        scenarios where the agent is ahead but ends up losing are calculated.
+        These values are used in conjunction with hand strength to estimate the effective
+        hand strength value of a hand/pocket
+        The 3 * 3 matrix that is create looks like this
+               AHEAD | TIE | BEHIND
+        AHEAD | 991     5     432
+        TIE   | 100     90     1
+        BEHIND| 874     0      581
+        A quick explanation:
+        matrix[AHEAD][AHEAD] represents the number of times the bot's hand was stronger than
+        the opponents before and after generating possible boards.
+        matrix[BEHIND][AHEAD] represents the number of times the bot's hand was weaker than the
+        opponents before generating possible boards, but became the stronger hand after.
+        The others follow the same logic.
+        :param board: (list) a list of 3-5 Card objects that depict the current visible game board
+        :param pocket: (list) a list of 2 Card objects that depict the bot's current hand
+        :return:
+                (list) containing the positive potential and negative potential respectively."""
+
+        pass
 
 
     def handle_new_round(self, game_state, round_state, active):
@@ -155,14 +188,13 @@ class Player(Bot):
             temp_action = FoldAction()
 
         _MONTE_CARLO_ITERS = 100
-        strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
+        strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS, comm = board_cards)
 
         if continue_cost > 0: # if opponent has bet
             _SCARY = continue_cost/pot_total * 0.2 # adjusting evaluation of opp strength by scaling relative to pot-sized bet
             
             
             strength = max([0, strength - _SCARY])    
-            print(strength)
             pot_odds = continue_cost/(pot_total + continue_cost)
 
             if strength >= pot_odds:
