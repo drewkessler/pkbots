@@ -136,9 +136,9 @@ class Player(Bot):
         pot_total = my_contribution + opp_contribution #total contributed at start of hand 
 
         if street<3: #we're preflop
-            raise_amount = int(my_pip + continue_cost + 0.4*(pot_total + continue_cost))
+            raise_amount = int(my_pip + continue_cost + 0.2*(pot_total + continue_cost))
         else:
-            raise_amount = int(my_pip + continue_cost + 0.75*(pot_total + continue_cost))
+            raise_amount = int(my_pip + continue_cost + 0.5*(pot_total + continue_cost))
 
         raise_amount = max([min_raise, raise_amount]) #make sure we have a valid raise
         raise_amount = min([max_raise, raise_amount])        
@@ -157,17 +157,12 @@ class Player(Bot):
         _MONTE_CARLO_ITERS = 100
         strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS)
 
-        if continue_cost > 0:
-            _SCARY = 0 
-            if continue_cost > 6:
-                _SCARY = 0.15
-            if continue_cost > 12:
-                _SCARY = 0.25
-            if continue_cost > 50:
-                _SCARY = 0.35
+        if continue_cost > 0: # if opponent has bet
+            _SCARY = continue_cost/pot_total * 0.2 # adjusting evaluation of opp strength by scaling relative to pot-sized bet
             
             
             strength = max([0, strength - _SCARY])    
+            print(strength)
             pot_odds = continue_cost/(pot_total + continue_cost)
 
             if strength >= pot_odds:
