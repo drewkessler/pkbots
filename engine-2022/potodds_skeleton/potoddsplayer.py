@@ -6,6 +6,7 @@ from skeleton.states import GameState, TerminalState, RoundState
 from skeleton.states import NUM_ROUNDS, STARTING_STACK, BIG_BLIND, SMALL_BLIND
 from skeleton.bot import Bot
 from skeleton.runner import parse_args, run_bot
+from runout import gen_possible_boards, gen_possible_hands
 
 import eval7
 import random
@@ -25,6 +26,8 @@ class Player(Bot):
         Nothing.
         '''
     
+
+
     def calc_strength(self, hole, iters, comm = None):
         '''
         A Monte carlo method that estimates the win probability of a pair of hole cards 
@@ -79,8 +82,9 @@ class Player(Bot):
 
 
 
-    def calc_potential(self, hole, community, iters):
+    def calc_potential(self, hole, comm):
         """
+        ONLY CALL AT FLOP OR TURN
         Calculates positive and negative potential for a given hand. They are defined as:
         Positive potential: of all possible games with the current hand, all
         scenarios where the agent is behind but ends up winning are calculated.
@@ -104,8 +108,68 @@ class Player(Bot):
         :return:
                 (list) containing the positive potential and negative potential respectively."""
 
-        pass
+        AHEAD = 0
+        TIED = 1
+        BEHIND = 2
 
+        my_potential = [[0]*3 for _ in range(3)]
+        p_total = [0,0,0]
+
+        hole_cards = [eval7.Deck(card) for card in hole]
+        comm_cards = [eval7.Deck(card) for card in comm]
+
+        other_pockets = gen_possible_hands(hole, comm = comm)
+
+        ind = None
+        our_init_value = eval7.evaluate(hole_cards+comm_cards)
+        
+        # go through each possible pocket the opponent and eval against mine
+        for opp_pocket in other_pockets:
+            opp_init_value = eval7.evaluate(opp_pocket+comm_cards)
+
+            if our_init_value > opp_init_value: # we're ahead
+                ind = AHEAD
+
+            elif our_init_value == opp_init_value: # we're tied
+                ind = TIED
+            
+            else: # we're behind
+                ind = BEHIND
+
+
+
+            #check possible future boards
+            for possible_board in gen_possible_boards(hole,opp_pocket,comm):
+                our_end_value = eval7.evaluate(hole+possible_board)
+                opp_end_value = eval7.evaluate(opp_pocket+possible_board)
+
+                if our_end_value > opp_end_value: # we're ahead
+                    my_potential[ind][AHEAD] += 1
+                
+                elif our_end_value == opp_end_value: # we're tied
+                    my_potential[ind][TIED] += 1
+                
+                else: # we're behind
+                    my_potential[ind][BEHIND] += 1
+
+                p_total[ind] += 1
+
+            
+        
+        pos_potential, neg_potential = 0.0,0.0
+        try:
+            pos_potential = (my_potential[BEHIND][AHEAD] + my_potential[BEHIND][TIED]/2.0 + my_potential[TIED][AHEAD]/2.0)
+        except ZeroDivisionError:
+            pos_potential = (my_potential[BEHIND][AHEAD] + my_potential[BEHIND][TIED]/2.0 + my_potential[TIED][AHEAD]/2.0) / (p_total[BEHIND] + p_total[TIED]/2.0 + float(1E-5))
+
+
+        try:
+            neg_potential = (my_potential[AHEAD][BEHIND] + (my_potential[TIED][BEHIND]/2.0) +(my_potential[AHEAD][TIED]/2.0)) / (p_total[AHEAD] + (p_total[TIED]/2.0))
+        except ZeroDivisionError:
+                        neg_potential = (my_potential[AHEAD][BEHIND] + (my_potential[TIED][BEHIND]/2.0) +(my_potential[AHEAD][TIED]/2.0)) / (p_total[AHEAD] + (p_total[TIED]/2.0) + float(1E-5))
+
+        
+        return [pos_potential,neg_potential]
 
     def handle_new_round(self, game_state, round_state, active):
         '''
@@ -194,7 +258,11 @@ class Player(Bot):
             _SCARY = continue_cost/pot_total * 0.15 # adjusting evaluation of opp strength by scaling relative to pot-sized bet
             
             
-            strength = max([0, strength - _SCARY])    
+            strength = max([0, strength - _SCARY])
+            if street == 3 or street == 4:
+                pos_potential, neg_potential = self.calc_potential(hole, board_cards)
+                strength = strength * (1- neg_potential) + (1-strength) * pos_potential
+
             pot_odds = continue_cost/(pot_total + continue_cost)
 
             if strength >= pot_odds:
