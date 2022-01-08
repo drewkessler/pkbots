@@ -26,7 +26,9 @@ class Player(Bot):
         Nothing.
         '''
     
-
+        self.opp_raises = 0.0
+        self.opp_calls = 0.0
+        self.hands_played = 0.0
 
     def calc_strength(self, hole, iters, comm = None):
         '''
@@ -115,8 +117,8 @@ class Player(Bot):
         my_potential = [[0]*3 for _ in range(3)]
         p_total = [0,0,0]
 
-        hole_cards = [eval7.Deck(card) for card in hole]
-        comm_cards = [eval7.Deck(card) for card in comm]
+        hole_cards = [eval7.Card(card) for card in hole]
+        comm_cards = [eval7.CArd(card) for card in comm]
 
         other_pockets = gen_possible_hands(hole, comm = comm)
 
@@ -202,6 +204,9 @@ class Player(Bot):
         street = previous_state.street  # 0, 3, 4, or 5 representing when this round ended
         my_cards = previous_state.hands[active]  # your cards
         opp_cards = previous_state.hands[1-active]  # opponent's cards or [] if not revealed
+
+        if street == 5:
+            self.hands_played += 1
         
     def get_action(self, game_state, round_state, active):
         '''
@@ -230,12 +235,17 @@ class Player(Bot):
         min_raise, max_raise = round_state.raise_bounds()
         my_action = None
 
+
+        if my_stack - 1.5*(1000-self.hands_played) > opp_stack + (1000-self.hands_played):
+            return FoldAction()
+
+
         pot_total = my_contribution + opp_contribution #total contributed at start of hand 
 
         if street<3: #we're preflop
             raise_amount = int(my_pip + continue_cost + 0.2*(pot_total + continue_cost))
         else:
-            raise_amount = int(my_pip + continue_cost + 0.8*(pot_total + continue_cost))
+            raise_amount = int(my_pip + continue_cost + 0.3*(pot_total + continue_cost))
 
         raise_amount = max([min_raise, raise_amount]) #make sure we have a valid raise
         raise_amount = min([max_raise, raise_amount])        
@@ -251,31 +261,39 @@ class Player(Bot):
         else:
             temp_action = FoldAction()
 
-        _MONTE_CARLO_ITERS = 100
+        _MONTE_CARLO_ITERS = 300
         strength = self.calc_strength(my_cards, _MONTE_CARLO_ITERS, comm = board_cards)
 
         if continue_cost > 0: # if opponent has bet
+            self.opp_raises += 1
             _SCARY = continue_cost/pot_total * 0.15 # adjusting evaluation of opp strength by scaling relative to pot-sized bet
             
-            
-            strength = max([0, strength - _SCARY])
+            p_strength = 0.0
             if street == 3 or street == 4:
-                pos_potential, neg_potential = self.calc_potential(hole, board_cards)
-                strength = strength * (1- neg_potential) + (1-strength) * pos_potential
+                pos_potential, neg_potential = self.calc_potential(my_cards, board_cards)
+                p_strength = strength * (1- neg_potential) + (1-strength) * pos_potential
 
+            _SCARY = continue_cost/pot_total * 0.15 # adjusting evaluation of opp strength by scaling relative to pot-sized bet
+            if p_strength != 0.0: 
+                adj_strength = max([0, p_strength - _SCARY])
+            else: 
+                adj_strength = max([0, strength - _SCARY])
             pot_odds = continue_cost/(pot_total + continue_cost)
 
-            if strength >= pot_odds:
-                if strength > 0.6 and random.random() < strength:
+            if adj_strength >= pot_odds:
+                if self.hands_played >= 200:
+                    if self.opp_raises/self.hands_played >= 0.2 and strength > 0.8 and (street == 4 or street == 5): # exploitative all-in
+                        my_action = RaiseAction(max_raise)
+                        print("hello"+str(max_raise)+" "+str(self.hands_played))
+                if adj_strength > 0.55 and random.random() < adj_strength:
                     my_action = temp_action
             
                 else:
                     my_action = CallAction()
-            
             else:
                 my_action = FoldAction()
         
-        else:
+        else: # if we're first to act
             if random.random() < strength:
                 my_action = temp_action
             
