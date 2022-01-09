@@ -198,7 +198,94 @@ def calc_strength_against_range(hole, iters, community = [], opp_range = []):
 
 
 
+def calc_potential(self, hole, comm):
+        """
+        ONLY CALL AT FLOP OR TURN
+        Calculates positive and negative potential for a given hand. They are defined as:
+        Positive potential: of all possible games with the current hand, all
+        scenarios where the agent is behind but ends up winning are calculated.
+        Negative potential: of all possible games with the current hand, all the
+        scenarios where the agent is ahead but ends up losing are calculated.
+        These values are used in conjunction with hand strength to estimate the effective
+        hand strength value of a hand/pocket
+        The 3 * 3 matrix that is create looks like this
+               AHEAD | TIE | BEHIND
+        AHEAD | 991     5     432
+        TIE   | 100     90     1
+        BEHIND| 874     0      581
+        A quick explanation:
+        matrix[AHEAD][AHEAD] represents the number of times the bot's hand was stronger than
+        the opponents before and after generating possible boards.
+        matrix[BEHIND][AHEAD] represents the number of times the bot's hand was weaker than the
+        opponents before generating possible boards, but became the stronger hand after.
+        The others follow the same logic.
+        :param board: (list) a list of 3-5 Card objects that depict the current visible game board
+        :param pocket: (list) a list of 2 Card objects that depict the bot's current hand
+        :return:
+                (list) containing the positive potential and negative potential respectively."""
 
+        AHEAD = 0
+        TIED = 1
+        BEHIND = 2
+
+        my_potential = [[0]*3 for _ in range(3)]
+        p_total = [0,0,0]
+
+        hole_cards = [eval7.Card(card) for card in hole]
+        comm_cards = [eval7.CArd(card) for card in comm]
+
+        other_pockets = gen_possible_hands(hole, comm = comm)
+
+        ind = None
+        our_init_value = eval7.evaluate(hole_cards+comm_cards)
+        
+        # go through each possible pocket the opponent and eval against mine
+        for opp_pocket in other_pockets:
+            opp_init_value = eval7.evaluate(opp_pocket+comm_cards)
+
+            if our_init_value > opp_init_value: # we're ahead
+                ind = AHEAD
+
+            elif our_init_value == opp_init_value: # we're tied
+                ind = TIED
+            
+            else: # we're behind
+                ind = BEHIND
+
+
+
+            #check possible future boards
+            for possible_board in gen_possible_boards(hole,opp_pocket,comm):
+                our_end_value = eval7.evaluate(hole+possible_board)
+                opp_end_value = eval7.evaluate(opp_pocket+possible_board)
+
+                if our_end_value > opp_end_value: # we're ahead
+                    my_potential[ind][AHEAD] += 1
+                
+                elif our_end_value == opp_end_value: # we're tied
+                    my_potential[ind][TIED] += 1
+                
+                else: # we're behind
+                    my_potential[ind][BEHIND] += 1
+
+                p_total[ind] += 1
+
+            
+        
+        pos_potential, neg_potential = 0.0,0.0
+        try:
+            pos_potential = (my_potential[BEHIND][AHEAD] + my_potential[BEHIND][TIED]/2.0 + my_potential[TIED][AHEAD]/2.0)
+        except ZeroDivisionError:
+            pos_potential = (my_potential[BEHIND][AHEAD] + my_potential[BEHIND][TIED]/2.0 + my_potential[TIED][AHEAD]/2.0) / (p_total[BEHIND] + p_total[TIED]/2.0 + float(1E-5))
+
+
+        try:
+            neg_potential = (my_potential[AHEAD][BEHIND] + (my_potential[TIED][BEHIND]/2.0) +(my_potential[AHEAD][TIED]/2.0)) / (p_total[AHEAD] + (p_total[TIED]/2.0))
+        except ZeroDivisionError:
+                        neg_potential = (my_potential[AHEAD][BEHIND] + (my_potential[TIED][BEHIND]/2.0) +(my_potential[AHEAD][TIED]/2.0)) / (p_total[AHEAD] + (p_total[TIED]/2.0) + float(1E-5))
+
+        
+        return [pos_potential,neg_potential]
 
 
 

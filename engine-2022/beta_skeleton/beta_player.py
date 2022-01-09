@@ -143,7 +143,7 @@ class Player(Bot):
 
                 potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
 
-                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping):
+                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping) + 0.2:
                     if potential_opp_hand in self.opp_range:
                         self.opp_range.remove(potential_opp_hand)
                         del self.opp_range_mapping[potential_opp_hand_tuple]
