@@ -1,9 +1,10 @@
 import eval7
 
 
-def gen_possible_hands(hole, comm = None):
+def gen_possible_hands(hole, comm = None, cleared_hands = []):
     """
-    Generates all possible hands that the opp could have.
+    Generates all possible hands that the opp could have, given the community cards
+    and our estimate of what cards they don't have
     Returns list of Cards in str format
     """
 
@@ -14,7 +15,7 @@ def gen_possible_hands(hole, comm = None):
 
 
     if comm: # if there are community cards
-        comm_cards = [eval7.Card(Card) for card in comm]
+        comm_cards = [eval7.Card(card) for card in comm]
         for comm_card in comm_cards:
             deck.cards.remove(comm_card)
 
@@ -25,13 +26,29 @@ def gen_possible_hands(hole, comm = None):
         for second_card in range(first_card+1,len(deck)):
             possible_hands.append([deck[first_card],deck[second_card]])
 
-    str_possible_hands = []
+    preclearing_str_possible_hands = []
 
     for hand in possible_hands:
         str_hand = str(hand)
         split = str_hand.split('(')
         str_hand = [split[1][1:3],split[2][1:3]]
-        str_possible_hands.append(str_hand)
+        preclearing_str_possible_hands.append(str_hand)
+    
+    if cleared_hands == []:
+        return preclearing_str_possible_hands
+    
+
+    str_possible_hands = []
+    for str_hand in preclearing_str_possible_hands:
+        adding = True
+        for cleared_hand in cleared_hands:
+            if set(str_hand) == set(cleared_hand): # if the hand has been cleared by our range estimate, using set objects to check for diff orders
+                adding = False
+        
+        if adding:
+            str_possible_hands.append(str_hand)
+    
+
     return str_possible_hands
 
 
@@ -179,7 +196,7 @@ def calc_strength_against_range(hole, iters, community = [], opp_range = []):
 
 
 if __name__ == "__main__":
-    opp_range = gen_possible_hands(["As","Ad"])
+    opp_range = gen_possible_hands(["As","Ad"],comm=["Ks","Ah","Ac"],cleared_hands=[["Ac","Ah"]])
     print(opp_range)
     our_hand = ["As","Ad"]
     print(calc_strength_against_range(our_hand,100,opp_range=opp_range))
