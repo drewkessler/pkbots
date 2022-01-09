@@ -1,4 +1,5 @@
 import eval7
+import numpy as np
 
 
 def gen_possible_hands(hole, comm = None, cleared_hands = []):
@@ -134,6 +135,8 @@ def calc_strength_against_range(hole, iters, community = [], opp_range = []):
         
 
     total_score = 0.0
+    if opp_range == []:
+        opp_range = gen_possible_hands(hole,comm = community)
     for opp_hand in opp_range:
 
 
@@ -195,11 +198,24 @@ def calc_strength_against_range(hole, iters, community = [], opp_range = []):
 
 
 
+
+
+
+
+
+def get_mean_strength_from_range(opp_range_mapping):
+    """
+    Getting median strength value from the opp_range_mapping
+    """
+
+    strengths = np.array(opp_range_mapping.values())
+    return np.mean(strengths)
+
 if __name__ == "__main__":
     opp_range = gen_possible_hands(["As","Ad"],comm=["Ks","Ah","Ac"],cleared_hands=[["Ac","Ah"]])
     print(opp_range)
     our_hand = ["As","Ad"]
-    print(calc_strength_against_range(our_hand,100,opp_range=opp_range))
+    print(calc_strength_against_range(our_hand,100,opp_range=opp_range))    
 
 
 

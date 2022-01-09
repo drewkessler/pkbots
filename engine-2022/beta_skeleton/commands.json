@@ -1,4 +1,4 @@
 {
     "build": [],
-    "run": ["python3", "potoddsplayer.py"]
+    "run": ["python3", "beta_player.py"]
 }
