@@ -97,9 +97,9 @@ class Player(Bot):
         pot_total = my_contribution + opp_contribution # total in pot
 
         if street < 3: # we're preflop
-            raise_amount = int(my_pip + continue_cost + 0.4*(pot_total + continue_cost))
+            raise_amount = int(my_pip + continue_cost + 0.2*(pot_total + continue_cost))
         else:
-            raise_amount = int(my_pip + continue_cost + 0.75*(pot_total + continue_cost))
+            raise_amount = int(my_pip + continue_cost + 0.5*(pot_total + continue_cost))
 
 
         raise_cost = raise_amount - my_pip # how much it costs to make said raise
@@ -114,7 +114,6 @@ class Player(Bot):
 
 
         _MONTE_CARLO_ITERS= 100
-        strength = calc_strength(my_cards, _MONTE_CARLO_ITERS, community = board_cards)
         
         # calculating the strength of the current expected opp_range
         opp_range = self.opp_range.copy()
@@ -143,14 +142,14 @@ class Player(Bot):
 
                 potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
 
-                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping) + 0.2:
+                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping) * 1.5:
                     if potential_opp_hand in self.opp_range:
                         self.opp_range.remove(potential_opp_hand)
                         del self.opp_range_mapping[potential_opp_hand_tuple]
 
             
             # getting our strength against expected opp_range
-            strength_against_range = calc_strength_against_range(my_cards, _MONTE_CARLO_ITERS, community = board_cards, opp_range = self.opp_range)
+            strength_against_range = calc_strength_against_range(my_cards, int(_MONTE_CARLO_ITERS/33), community = board_cards, opp_range = self.opp_range)
 
 
             if strength_against_range >= pot_odds:
@@ -169,7 +168,7 @@ class Player(Bot):
 
         else: # continuation cost is 0
 
-            if random.random() < strength:
+            if random.random() < calc_strength(my_cards, _MONTE_CARLO_ITERS, community = board_cards):
                 my_action = temp_action
             
             else:

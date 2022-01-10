@@ -302,7 +302,7 @@ if __name__ == "__main__":
     opp_range = gen_possible_hands(["As","Ad"],comm=["Ks","Ah","Ac"],cleared_hands=[["Ac","Ah"]])
     print(opp_range)
     our_hand = ["As","Ad"]
-    print(calc_strength_against_range(our_hand,100,opp_range=opp_range))    
+    print(calc_strength_against_range(our_hand,100,opp_range=[["Ac","Kh"]]))    
 
 
 
