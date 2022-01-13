@@ -66,6 +66,26 @@ class Player(Bot):
         my_cards = previous_state.hands[active]  # your cards
         opp_cards = previous_state.hands[1-active]  # opponent's cards or [] if not revealed
 
+    
+    def get_bet_size(self,strength_against_range,street,big_blind,pot_total,continue_cost,my_pip):
+
+        raise_amount = 0
+        if street < 3: # we're preflop
+            raise_amount = int(my_pip + continue_cost + 0.5*strength_against_range*(pot_total + continue_cost))
+        
+        elif street == 3: # we're at flop
+            raise_amount = int(my_pip + continue_cost + 0.75*strength_against_range*(pot_total + continue_cost))
+        
+        elif street == 4: # we're at turn
+            raise_amount = int(my_pip + continue_cost + 0.25*strength_against_range*(pot_total + continue_cost))
+
+        elif street == 5: # we're at river
+            raise_amount = int(my_pip + continue_cost + strength_against_range*(pot_total+continue_cost))
+
+
+
+        return raise_amount
+
     def get_action(self, game_state, round_state, active):
         '''
         Where the magic happens - your code should implement this function.
@@ -96,16 +116,7 @@ class Player(Bot):
         min_raise, max_raise = round_state.raise_bounds()
         pot_total = my_contribution + opp_contribution # total in pot
 
-        if street < 3: # we're preflop
-            raise_amount = int(my_pip + continue_cost + 0.2*(pot_total + continue_cost))
-        else:
-            raise_amount = int(my_pip + continue_cost + 0.5*(pot_total + continue_cost))
-
-
-        raise_cost = raise_amount - my_pip # how much it costs to make said raise
-        if (RaiseAction in legal_actions and (raise_cost <= my_stack)): #only consider raising if the hand we have is strong
-            temp_action = RaiseAction(raise_amount)
-        elif (CallAction in legal_actions and (continue_cost <= my_stack)): #only consider raising if the hand we have is strong
+        if (CallAction in legal_actions and (continue_cost <= my_stack)): #only consider raising if the hand we have is strong
             temp_action = CallAction()
         elif CheckAction in legal_actions:
             temp_action = CheckAction()
@@ -134,6 +145,7 @@ class Player(Bot):
         
         if continue_cost > 0:
 
+            opp_bet_ratio = continue_cost / pot_total
             pot_odds = continue_cost / (pot_total + continue_cost) # calculating pot odds of staying continuation cost
             
             # updating estimate of opponent's range
@@ -142,7 +154,7 @@ class Player(Bot):
 
                 potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
 
-                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping) * 1.5:
+                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping):
                     if potential_opp_hand in self.opp_range:
                         self.opp_range.remove(potential_opp_hand)
                         del self.opp_range_mapping[potential_opp_hand_tuple]
@@ -154,8 +166,13 @@ class Player(Bot):
 
             if strength_against_range >= pot_odds:
 
-                if strength_against_range > 0.5 and random.random() < strength_against_range:
-                    my_action = temp_action
+                if strength_against_range > 0.65 and random.random() < strength_against_range: # we raise
+                    raise_amount = self.get_bet_size(strength_against_range,street,active,pot_total,continue_cost,my_pip)
+
+                    raise_cost = raise_amount - my_pip # how much it costs to make said raise
+                    if (RaiseAction in legal_actions and (raise_cost <= my_stack)): #only consider raising if the hand we have is strong
+                        my_action = RaiseAction(raise_amount)
+                    
                 
                 else: 
                     my_action = CallAction()
@@ -168,8 +185,26 @@ class Player(Bot):
 
         else: # continuation cost is 0
 
-            if random.random() < calc_strength(my_cards, _MONTE_CARLO_ITERS, community = board_cards):
-                my_action = temp_action
+            if active and street >= 3: # we're big blind so opp checked
+                # updating estimate of opponent's range, assuming weakness
+                current_range_in_mapping = list(self.opp_range_mapping.keys())
+                for potential_opp_hand_tuple in current_range_in_mapping:
+
+                    potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
+
+                    if self.opp_range_mapping[potential_opp_hand_tuple] >= get_mean_strength_from_range(self.opp_range_mapping):
+                        if potential_opp_hand in self.opp_range:
+                            self.opp_range.remove(potential_opp_hand)
+                            del self.opp_range_mapping[potential_opp_hand_tuple]
+                
+
+            strength_against_range = calc_strength_against_range(my_cards, int(_MONTE_CARLO_ITERS/33), community = board_cards,opp_range=self.opp_range)
+            if random.random() < strength_against_range:
+                raise_amount = self.get_bet_size(strength_against_range,street,active,pot_total,continue_cost,my_pip)
+
+                raise_cost = raise_amount - my_pip # how much it costs to make said raise
+                if (RaiseAction in legal_actions and (raise_cost <= my_stack)): # only consider raising if the hand we have is strong
+                    my_action = RaiseAction(raise_amount)
             
             else:
                 my_action = CheckAction()
