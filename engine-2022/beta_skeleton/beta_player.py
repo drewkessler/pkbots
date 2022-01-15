@@ -2,6 +2,7 @@
 Simple example pokerbot, written in Python.
 '''
 import random
+import pandas as pd
 from skeleton.actions import FoldAction, CallAction, CheckAction, RaiseAction
 from skeleton.states import GameState, TerminalState, RoundState
 from skeleton.states import NUM_ROUNDS, STARTING_STACK, BIG_BLIND, SMALL_BLIND
@@ -27,6 +28,12 @@ class Player(Bot):
         '''
         self.opp_range = []
         self.opp_range_mapping = {} # mapping opp_range to expected win rate
+
+
+        calculated_df = pd.read_csv('hole_strengths.csv') #the values we computed offline, this df is slow to search through though
+        holes = calculated_df.Holes #the columns of our spreadsheet
+        strengths = calculated_df.Strengths
+        self.starting_strengths = dict(zip(holes, strengths)) #convert to a dictionary, O(1) lookup time!
 
 
     def handle_new_round(self, game_state, round_state, active):
@@ -112,6 +119,10 @@ class Player(Bot):
         opp_contribution = STARTING_STACK - opp_stack  # the number of chips your opponent has contributed to the pot
 
 
+        if (my_stack-opp_stack)/2 > (NUM_ROUNDS-game_state.round_num): # we've already won
+            print("WON")
+            return FoldAction()
+
         my_action = None
         min_raise, max_raise = round_state.raise_bounds()
         pot_total = my_contribution + opp_contribution # total in pot
@@ -127,20 +138,27 @@ class Player(Bot):
         _MONTE_CARLO_ITERS= 100
         
         # calculating the strength of the current expected opp_range
-        opp_range = self.opp_range.copy()
-        for potential_opp_hand in opp_range:
-            alreadyTaken = False
+        if street > 0:
+            opp_range = self.opp_range.copy()
+            for potential_opp_hand in opp_range:
+                alreadyTaken = False
 
-            for card in board_cards:
-                if card in potential_opp_hand:
-                    alreadyTaken = True
+                for card in board_cards:
+                    if card in potential_opp_hand:
+                        alreadyTaken = True
                 
-            if not alreadyTaken:
-                self.opp_range_mapping[tuple(potential_opp_hand)] = calc_strength(potential_opp_hand, _MONTE_CARLO_ITERS, community = board_cards)
-            else: # cleared out of the range
-                self.opp_range.remove(potential_opp_hand)
-                if tuple(potential_opp_hand) in self.opp_range_mapping.keys():
-                    del self.opp_range_mapping[tuple(potential_opp_hand)]
+                if not alreadyTaken:
+                    self.opp_range_mapping[tuple(potential_opp_hand)] = calc_strength(potential_opp_hand, _MONTE_CARLO_ITERS, community = board_cards)
+                else: # cleared out of the range
+                    self.opp_range.remove(potential_opp_hand)
+                    if tuple(potential_opp_hand) in self.opp_range_mapping.keys():
+                        del self.opp_range_mapping[tuple(potential_opp_hand)]
+
+        
+        if street == 0:
+            opp_range = self.opp_range.copy()
+            for potential_opp_hand in opp_range:
+                self.opp_range_mapping[tuple(potential_opp_hand)] = get_preflop_strength(potential_opp_hand)
 
         
         if continue_cost > 0:
@@ -154,7 +172,7 @@ class Player(Bot):
 
                 potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
 
-                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping):
+                if self.opp_range_mapping[potential_opp_hand_tuple] <= get_mean_strength_from_range(self.opp_range_mapping) + 0.5*get_std_of_range_strengths(self.opp_range_mapping):
                     if potential_opp_hand in self.opp_range:
                         self.opp_range.remove(potential_opp_hand)
                         del self.opp_range_mapping[potential_opp_hand_tuple]
@@ -173,7 +191,10 @@ class Player(Bot):
                     if (RaiseAction in legal_actions and (raise_cost <= my_stack)): #only consider raising if the hand we have is strong
                         my_action = RaiseAction(raise_amount)
                     
-                
+                    else:
+                        my_action = CallAction()
+
+                        
                 else: 
                     my_action = CallAction()
 
@@ -185,14 +206,14 @@ class Player(Bot):
 
         else: # continuation cost is 0
 
-            if active and street >= 3: # we're big blind so opp checked
+            if bool(active) and street >= 3: # we're big blind so opp checked
                 # updating estimate of opponent's range, assuming weakness
                 current_range_in_mapping = list(self.opp_range_mapping.keys())
                 for potential_opp_hand_tuple in current_range_in_mapping:
 
                     potential_opp_hand = list(potential_opp_hand_tuple) # converting the key from tuple to list
 
-                    if self.opp_range_mapping[potential_opp_hand_tuple] >= get_mean_strength_from_range(self.opp_range_mapping):
+                    if self.opp_range_mapping[potential_opp_hand_tuple] >= get_mean_strength_from_range(self.opp_range_mapping) - 0.5*get_std_of_range_strengths(self.opp_range_mapping):
                         if potential_opp_hand in self.opp_range:
                             self.opp_range.remove(potential_opp_hand)
                             del self.opp_range_mapping[potential_opp_hand_tuple]
@@ -205,6 +226,9 @@ class Player(Bot):
                 raise_cost = raise_amount - my_pip # how much it costs to make said raise
                 if (RaiseAction in legal_actions and (raise_cost <= my_stack)): # only consider raising if the hand we have is strong
                     my_action = RaiseAction(raise_amount)
+                
+                else:
+                    my_action = CheckAction()
             
             else:
                 my_action = CheckAction()
