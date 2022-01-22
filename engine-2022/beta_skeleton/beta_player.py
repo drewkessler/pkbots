@@ -135,30 +135,25 @@ class Player(Bot):
             temp_action = FoldAction()
 
 
-        _MONTE_CARLO_ITERS= 100
+        _MONTE_CARLO_ITERS= 20
         
         # calculating the strength of the current expected opp_range
-        if street > 0:
-            opp_range = self.opp_range.copy()
-            for potential_opp_hand in opp_range:
-                alreadyTaken = False
+        opp_range = self.opp_range.copy()
+        for potential_opp_hand in opp_range:
+            alreadyTaken = False
 
-                for card in board_cards:
-                    if card in potential_opp_hand:
-                        alreadyTaken = True
+            for card in board_cards:
+                if card in potential_opp_hand:
+                    alreadyTaken = True
                 
-                if not alreadyTaken:
-                    self.opp_range_mapping[tuple(potential_opp_hand)] = calc_strength(potential_opp_hand, _MONTE_CARLO_ITERS, community = board_cards)
-                else: # cleared out of the range
-                    self.opp_range.remove(potential_opp_hand)
-                    if tuple(potential_opp_hand) in self.opp_range_mapping.keys():
-                        del self.opp_range_mapping[tuple(potential_opp_hand)]
+            if not alreadyTaken:
+                self.opp_range_mapping[tuple(potential_opp_hand)] = calc_strength(potential_opp_hand, _MONTE_CARLO_ITERS, community = board_cards)
+            else: # cleared out of the range
+                self.opp_range.remove(potential_opp_hand)
+                if tuple(potential_opp_hand) in self.opp_range_mapping.keys():
+                    del self.opp_range_mapping[tuple(potential_opp_hand)]
 
         
-        if street == 0:
-            opp_range = self.opp_range.copy()
-            for potential_opp_hand in opp_range:
-                self.opp_range_mapping[tuple(potential_opp_hand)] = get_preflop_strength(potential_opp_hand)
 
         
         if continue_cost > 0:
@@ -179,7 +174,7 @@ class Player(Bot):
 
             
             # getting our strength against expected opp_range
-            strength_against_range = calc_strength_against_range(my_cards, int(_MONTE_CARLO_ITERS/33), community = board_cards, opp_range = self.opp_range)
+            strength_against_range = calc_strength_against_range(my_cards, 1, community = board_cards, opp_range = self.opp_range)
 
 
             if strength_against_range >= pot_odds:
@@ -194,7 +189,7 @@ class Player(Bot):
                     else:
                         my_action = CallAction()
 
-                        
+
                 else: 
                     my_action = CallAction()
 
@@ -219,7 +214,7 @@ class Player(Bot):
                             del self.opp_range_mapping[potential_opp_hand_tuple]
                 
 
-            strength_against_range = calc_strength_against_range(my_cards, int(_MONTE_CARLO_ITERS/33), community = board_cards,opp_range=self.opp_range)
+            strength_against_range = calc_strength_against_range(my_cards, 1, community = board_cards,opp_range=self.opp_range)
             if random.random() < strength_against_range:
                 raise_amount = self.get_bet_size(strength_against_range,street,active,pot_total,continue_cost,my_pip)
 

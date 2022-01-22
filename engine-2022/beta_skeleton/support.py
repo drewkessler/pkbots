@@ -1,6 +1,7 @@
 import eval7
 import numpy as np
 import pandas as pd
+import random
 
 
 def gen_possible_hands(hole, comm = None, cleared_hands = []):
@@ -177,7 +178,7 @@ def calc_strength(hole, iters, community = []):
 
 
 
-def calc_strength_against_range(hole, iters, community = [], opp_range = []):
+def calc_strength_against_range(hole, iters, community = [], opp_range = [], prob_inclusion = 0.3):
     """
     Calculates strength against a range of hands the opponent could have
 
@@ -212,6 +213,9 @@ def calc_strength_against_range(hole, iters, community = [], opp_range = []):
 
         score = 0
         for _ in range(iters): # MC the probability of winning
+            if prob_inclusion >= random.random():
+                continue
+            
             deck.shuffle()
 
             _COMM = 5 - len(community)
